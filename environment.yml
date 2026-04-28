@@ -1,0 +1,11 @@
+name: ai-security-env
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - flask=3.0.0
+  - transformers=4.35.0
+  - pytorch=2.1.0
+  - pip

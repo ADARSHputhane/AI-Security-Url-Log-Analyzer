@@ -1,0 +1,21 @@
+# Environments
+venv/
+env/
+.env
+
+# Anaconda
+environment.yml
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE settings
+.vscode/
+.idea/
