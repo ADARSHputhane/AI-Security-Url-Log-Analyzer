@@ -7,7 +7,6 @@ import {
   uploadCSVFile,
   uploadLogFile,
   FileAnalysisResult,
-  ThreatAnalysisItem,
 } from "../lib/api";
 
 // 1. Reusable Loading Component
@@ -111,53 +110,154 @@ const FileResultsDisplay = ({ results }: { results: FileAnalysisResult }) => {
     );
   }
 
+  const total = results.total_rows ?? results.total_lines ?? results.results.length;
+  const threats = results.results.filter((item) => {
+    if ("threat_analysis" in item && item.threat_analysis?.length) {
+      return item.threat_analysis.some(
+        (t) => t.prediction !== "Normal Web Traffic",
+      );
+    }
+    return item.prediction && item.prediction !== "Normal Web Traffic";
+  }).length;
+
   return (
-    <div className="mt-6 space-y-4">
-      <div className="p-4 bg-slate-900/30 border border-slate-700/50 rounded-lg flex justify-between items-center">
-        <p className="text-xs font-mono text-slate-400">
-          FILE_REF: <span className="text-cyan-400">{results.filename}</span>
-        </p>
-        <p className="text-xs font-mono text-slate-400">
-          TOTAL_NODES:{" "}
-          <span className="text-emerald-400">
-            {results.total_rows || results.total_lines}
-          </span>
-        </p>
+    <div className="mt-6 space-y-3">
+      {/* Summary header */}
+      <div className="p-4 bg-slate-900/40 border border-slate-700/50 rounded-xl grid grid-cols-3 gap-2 text-center">
+        <div>
+          <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">File</p>
+          <p className="text-xs font-mono text-cyan-400 truncate mt-0.5">{results.filename}</p>
+        </div>
+        <div>
+          <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Total</p>
+          <p className="text-lg font-bold text-slate-200 leading-tight">{total}</p>
+        </div>
+        <div>
+          <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Threats</p>
+          <p className={`text-lg font-bold leading-tight ${threats > 0 ? "text-red-400" : "text-emerald-400"}`}>
+            {threats}
+          </p>
+        </div>
       </div>
 
-      <div className="max-h-96 overflow-y-auto space-y-2 pr-2 scrollbar-thin scrollbar-thumb-slate-700">
-        {results.results.slice(0, 20).map((item, idx: number) => {
-          const isThreat =
-            item.prediction?.toLowerCase().includes("malicious") ||
-            (item.prediction && item.prediction !== "Normal Web Traffic") ||
-            (item.threat_analysis &&
-              item.threat_analysis.some((t: ThreatAnalysisItem) =>
-                t.prediction?.toLowerCase().includes("malicious"),
-              ));
+      {/* Row cards */}
+      <div className="max-h-[420px] overflow-y-auto space-y-2 pr-1">
+        {results.results.slice(0, 20).map((item, idx) => {
+          const isCsv = "row_number" in item;
+          const label = isCsv ? `ROW ${item.row_number}` : `LINE ${item.line_number}`;
+
+          // For CSV rows use threat_analysis entries; for log lines build a single entry
+          const entries: { value: string; type: string; prediction: string; confidence?: number; column?: string }[] =
+            isCsv && item.threat_analysis?.length
+              ? item.threat_analysis.map((t) => ({
+                  value: t.value,
+                  type: t.type,
+                  prediction: t.prediction,
+                  confidence: t.confidence,
+                  column: t.column,
+                }))
+              : [
+                  {
+                    value: (item as { log_entry?: string }).log_entry ?? "",
+                    type: "LOG_ENTRY",
+                    prediction: item.prediction ?? "Unknown",
+                    confidence: (item as { confidence?: number }).confidence,
+                  },
+                ];
+
+          const rowIsThreat = entries.some(
+            (e) => e.prediction !== "Normal Web Traffic",
+          );
 
           return (
             <div
               key={idx}
-              className={`p-3 rounded border-l-2 bg-slate-950/40 text-[11px] ${isThreat ? "border-red-500 text-red-300" : "border-emerald-500 text-emerald-300"}`}
+              className={`rounded-xl border bg-slate-950/50 overflow-hidden ${
+                rowIsThreat ? "border-red-500/40" : "border-emerald-500/40"
+              }`}
             >
-              <div className="flex justify-between items-center mb-1 opacity-70">
-                <span className="font-mono">
-                  {"row_number" in item
-                    ? `ROW_${item.row_number}`
-                    : `LINE_${item.line_number}`}
+              {/* Card header */}
+              <div
+                className={`flex items-center justify-between px-4 py-2 text-[10px] font-mono uppercase tracking-widest ${
+                  rowIsThreat
+                    ? "bg-red-950/30 text-red-400"
+                    : "bg-emerald-950/30 text-emerald-400"
+                }`}
+              >
+                <span>{label}</span>
+                <span className="flex items-center gap-1">
+                  {rowIsThreat ? "⚠ Threat Detected" : "✓ Clean"}
                 </span>
-                <span>{item.prediction}</span>
               </div>
-              {item.threat_analysis?.[0] && (
-                <p className="text-slate-500 truncate italic">
-                  {item.threat_analysis[0].column}:{" "}
-                  {item.threat_analysis[0].prediction}
-                </p>
-              )}
+
+              {/* Entries */}
+              <div className="divide-y divide-slate-800/60">
+                {entries.map((e, ei) => (
+                  <div key={ei} className="px-4 py-3 space-y-1.5">
+                    {/* Value */}
+                    <p className="text-xs font-mono text-slate-300 break-all leading-relaxed">
+                      {e.column && (
+                        <span className="text-slate-500 mr-1">[{e.column}]</span>
+                      )}
+                      {e.value}
+                    </p>
+
+                    {/* Prediction + confidence + type badge */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span
+                        className={`text-[11px] font-semibold ${
+                          e.prediction === "Normal Web Traffic"
+                            ? "text-emerald-400"
+                            : "text-red-400"
+                        }`}
+                      >
+                        {e.prediction}
+                      </span>
+                      {e.confidence !== undefined && (
+                        <>
+                          <span className="text-slate-600 text-[10px]">•</span>
+                          <span className="text-[10px] font-mono text-slate-400">
+                            {e.confidence.toFixed(1)}% confidence
+                          </span>
+                        </>
+                      )}
+                      <span
+                        className={`ml-auto text-[9px] font-mono px-2 py-0.5 rounded-full border ${
+                          e.type === "URL"
+                            ? "border-cyan-500/40 text-cyan-400 bg-cyan-500/5"
+                            : "border-purple-500/40 text-purple-400 bg-purple-500/5"
+                        }`}
+                      >
+                        {e.type}
+                      </span>
+                    </div>
+
+                    {/* Confidence bar */}
+                    {e.confidence !== undefined && (
+                      <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${
+                            e.prediction === "Normal Web Traffic"
+                              ? "bg-emerald-500"
+                              : "bg-red-500"
+                          }`}
+                          style={{ width: `${e.confidence}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           );
         })}
       </div>
+
+      {results.results.length > 20 && (
+        <p className="text-center text-[10px] font-mono text-slate-500">
+          Showing first 20 of {total} entries
+        </p>
+      )}
     </div>
   );
 };
