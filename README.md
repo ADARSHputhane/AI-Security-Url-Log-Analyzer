@@ -47,7 +47,7 @@ python3 app.py
 ### 4. Access the Dashboard
 
 ```bash
-python3 app.py
+http://127.0.0.1:5000
 ```
 
 #### 🧠 Example Test Cases
